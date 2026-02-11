@@ -285,6 +285,6 @@ class EntryPointScanner(BaseScanner):
                 "dist%": round(best_details.get("close_dist_%", 0), 1),
                 "ath%": round(pct_from_ath, 1),
                 "wk": "Y" if weekly_full_align else "",
-                "cap$B": round(fundamentals.get("marketCap", 0) / 1e9, 1),
+                "cap$B": round(fundamentals.get("marketCap", 0) / 1e9),
             },
         )

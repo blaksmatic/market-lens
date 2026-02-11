@@ -1,0 +1,16 @@
+[project]
+name = "stock-scanner"
+version = "0.1.0"
+description = "CLI stock scanner with pluggable strategies"
+requires-python = ">=3.12"
+dependencies = [
+    "yfinance>=1.0",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "tqdm>=4.65",
+]
+
+[project.scripts]
+stock-scanner = "main:cli"

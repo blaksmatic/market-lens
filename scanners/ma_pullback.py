@@ -90,6 +90,6 @@ class MAPullbackScanner(BaseScanner):
                 "spread_%": round(spread_pct, 2),
                 "align_days": alignment_days,
                 "sector": fundamentals.get("sector", "N/A"),
-                "mkt_cap_B": round(fundamentals.get("marketCap", 0) / 1e9, 1),
+                "mkt_cap_B": round(fundamentals.get("marketCap", 0) / 1e9),
             },
         )

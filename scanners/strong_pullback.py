@@ -188,6 +188,6 @@ class StrongPullbackScanner(BaseScanner):
                 f"d_ma{self.d_mid}": round(dm_val, 2),
                 f"w_spread_%": round(w_spread_pct, 1),
                 "sector": fundamentals.get("sector", "N/A"),
-                "mkt_cap_B": round(fundamentals.get("marketCap", 0) / 1e9, 1),
+                "mkt_cap_B": round(fundamentals.get("marketCap", 0) / 1e9),
             },
         )
