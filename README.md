@@ -7,22 +7,21 @@ A CLI tool for scanning US stocks to find investment opportunities using pluggab
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+brew install uv
+uv sync
 ```
 
 ## Quick Start
 
 ```bash
 # 1. Build the ticker universe (US stocks with market cap > $5B)
-python main.py refresh-tickers
+uv run python main.py refresh-tickers
 
 # 2. Fetch OHLCV + fundamentals data
-python main.py fetch-data
+uv run python main.py fetch-data
 
-# 3. Run a scanner
-python main.py scan -s entry_point --top 20
+# 3. Run a scanner (auto-updates data + backtests top results)
+uv run python main.py scan -s entry_point --top 20
 ```
 
 ## Commands
@@ -32,7 +31,7 @@ python main.py scan -s entry_point --top 20
 Fetches all US equities (NYSE + NASDAQ) with market cap > $5B using the Yahoo Finance screener. Results cached to `data/tickers.parquet`.
 
 ```bash
-python main.py refresh-tickers
+uv run python main.py refresh-tickers
 ```
 
 ### `fetch-data`
@@ -40,12 +39,12 @@ python main.py refresh-tickers
 Fetches daily OHLCV price history and fundamental data for all tickers in the universe.
 
 ```bash
-python main.py fetch-data                    # Fetch all (default 5 years of history)
-python main.py fetch-data --years 3          # 3 years of history
-python main.py fetch-data --full             # Force full re-download
-python main.py fetch-data -t AAPL -t MSFT    # Specific tickers only
-python main.py fetch-data --ohlcv-only       # Skip fundamentals
-python main.py fetch-data --fundamentals-only
+uv run python main.py fetch-data                    # Fetch all (default 5 years of history)
+uv run python main.py fetch-data --years 3          # 3 years of history
+uv run python main.py fetch-data --full             # Force full re-download
+uv run python main.py fetch-data -t AAPL -t MSFT    # Specific tickers only
+uv run python main.py fetch-data --ohlcv-only       # Skip fundamentals
+uv run python main.py fetch-data --fundamentals-only
 ```
 
 **Caching**: OHLCV data is cached per-ticker as Parquet files. Subsequent runs only fetch new data since the last cached date. The cache is aware of trading days -- it won't re-fetch on weekends or before market close if data is already current.
@@ -55,21 +54,44 @@ python main.py fetch-data --fundamentals-only
 Runs a scanner against cached data. By default, updates OHLCV data before scanning (skips automatically if cache is fresh).
 
 ```bash
-python main.py scan -s entry_point                      # Run scanner (auto-updates data)
-python main.py scan -s entry_point --no-update           # Skip data update
-python main.py scan -s entry_point --top 20              # Show top 20 results
-python main.py scan -s entry_point --csv                 # Export results to CSV
-python main.py scan -s entry_point -t AAPL -t MSFT       # Scan specific tickers
-python main.py scan -s ma_pullback -p pullback_pct=3     # Override scanner parameters
+uv run python main.py scan -s entry_point                      # Run scanner (auto-updates data, backtests top results)
+uv run python main.py scan -s entry_point --no-update           # Skip data update
+uv run python main.py scan -s entry_point --top 20              # Show top 20 results
+uv run python main.py scan -s entry_point --csv                 # Export results to CSV
+uv run python main.py scan -s entry_point -t AAPL -t MSFT       # Scan specific tickers
+uv run python main.py scan -s ma_pullback -p pullback_pct=3     # Override scanner parameters
 ```
+
+The `scan` command automatically backtests the top results after scanning. The final score is a blend of 60% scan score + 40% backtest score. The `bt` column in results shows `win_rate%/avg_return/sample_size`.
 
 ### `list-scan`
 
 Lists all available scanners.
 
 ```bash
-python main.py list-scan
+uv run python main.py list-scan
 ```
+
+### `backtest`
+
+Runs MA sensitivity backtesting on specific tickers or on the top results from a scanner. Walks through historical OHLCV data to find all MA touch events where the trend was aligned, then measures bounce success.
+
+```bash
+uv run python main.py backtest -t AAPL -t MSFT               # Backtest specific tickers
+uv run python main.py backtest -s entry_point                  # Run scanner first, backtest top results
+uv run python main.py backtest -s entry_point --top 20         # Backtest top 20 scan results
+uv run python main.py backtest -t AAPL --hold-days 10          # Custom hold period (default 5)
+uv run python main.py backtest -t AAPL --strategy max_return   # Use max return strategy
+uv run python main.py backtest -t AAPL --csv                   # Export results to CSV
+```
+
+**Strategies:**
+- `bounce` (default) -- Return % from touch-day close to close after N hold days
+- `max_return` -- Best possible return (high watermark) within the hold window
+
+**Output columns:** `win%`, `avg%`, `n` (sample size), per-MA breakdowns (`m10w%`, `m10n`, `m20w%`, `m20n`)
+
+**Scoring:** Weighted combination of win rate and average return, with a confidence penalty for fewer than 10 historical touches.
 
 ## Scanners
 
@@ -136,14 +158,15 @@ class MyScanner(BaseScanner):
         )
 ```
 
-Then run: `python main.py scan -s my_scanner`
+Then run: `uv run python main.py scan -s my_scanner`
 
 ## Project Structure
 
 ```
 main.py                 CLI entry point
 config.py               Paths and constants
-requirements.txt        Python dependencies
+pyproject.toml          Dependencies and project metadata (managed by uv)
+uv.lock                 Locked dependency versions
 tickers/
   universe.py           Ticker universe fetch via yfinance screener
 data/
@@ -155,6 +178,8 @@ scanners/
   ma_pullback.py        MA alignment + pullback scanner
   strong_pullback.py    Strong weekly trend + daily bounce scanner
   entry_point.py        Trend entry point scanner (touch/hammer at MA)
+backtest/
+  ma_sensitivity.py     MA touch backtest engine (bounce + max_return strategies)
 output/
   formatter.py          Rich console table + CSV export
 ```
