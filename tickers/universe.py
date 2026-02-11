@@ -12,22 +12,23 @@ logger = logging.getLogger(__name__)
 SCREEN_PAGE_SIZE = 250
 
 
-def fetch_universe() -> pd.DataFrame:
+def fetch_universe(min_market_cap: int = MIN_MARKET_CAP) -> pd.DataFrame:
     """
-    Use yfinance screener to get all US equities on NYSE + NASDAQ
-    with market cap > $5B. Paginates through results.
+    Use yfinance screener to get all US equities on NYSE + NASDAQ,
+    optionally filtered by market cap. Paginates through results.
+
+    Args:
+        min_market_cap: Minimum market cap in dollars. 0 = no filter.
 
     Returns:
         DataFrame with columns: symbol, shortName, exchange, marketCap,
         sector, industry (and other fields Yahoo returns).
     """
-    query = EquityQuery(
-        "and",
-        [
-            EquityQuery("is-in", ["exchange"] + EXCHANGES),
-            EquityQuery("gt", ["intradaymarketcap", MIN_MARKET_CAP]),
-        ],
-    )
+    filters = [EquityQuery("is-in", ["exchange"] + EXCHANGES)]
+    if min_market_cap > 0:
+        filters.append(EquityQuery("gt", ["intradaymarketcap", min_market_cap]))
+
+    query = EquityQuery("and", filters)
 
     all_quotes = []
     offset = 0

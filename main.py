@@ -22,12 +22,17 @@ def cli():
 
 
 @cli.command("refresh-tickers")
-def refresh_tickers():
+@click.option("--cap", type=float, default=5, show_default=True, help="Min market cap in billions. 0 = no filter.")
+def refresh_tickers(cap):
     """Refresh the ticker universe from Yahoo Finance screener."""
     from tickers.universe import fetch_universe
 
-    click.echo("Fetching US equities with market cap > $5B from NYSE + NASDAQ...")
-    df = fetch_universe()
+    min_cap = int(cap * 1e9)
+    if min_cap > 0:
+        click.echo(f"Fetching US equities with market cap > ${cap:.0f}B from NYSE + NASDAQ...")
+    else:
+        click.echo("Fetching all US equities from NYSE + NASDAQ...")
+    df = fetch_universe(min_market_cap=min_cap)
     click.echo(f"Found {len(df)} tickers.")
 
 
