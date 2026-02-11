@@ -28,10 +28,12 @@ uv run python main.py scan -s entry_point --top 20
 
 ### `refresh-tickers`
 
-从 Yahoo Finance 筛选器获取 NYSE + NASDAQ 市值超过 50 亿美元的所有美股，缓存至 `data/tickers.parquet`。
+从 Yahoo Finance 筛选器获取 NYSE + NASDAQ 的美股，缓存至 `data/tickers.parquet`。
 
 ```bash
-uv run python main.py refresh-tickers
+uv run python main.py refresh-tickers              # 默认：市值 > 50亿美元
+uv run python main.py refresh-tickers --cap 10     # 市值 > 100亿美元
+uv run python main.py refresh-tickers --cap 0      # 所有股票，无市值过滤
 ```
 
 ### `fetch-data`

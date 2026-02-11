@@ -28,10 +28,12 @@ uv run python main.py scan -s entry_point --top 20
 
 ### `refresh-tickers`
 
-Fetches all US equities (NYSE + NASDAQ) with market cap > $5B using the Yahoo Finance screener. Results cached to `data/tickers.parquet`.
+Fetches all US equities (NYSE + NASDAQ) using the Yahoo Finance screener. Results cached to `data/tickers.parquet`.
 
 ```bash
-uv run python main.py refresh-tickers
+uv run python main.py refresh-tickers              # Default: market cap > $5B
+uv run python main.py refresh-tickers --cap 10     # Market cap > $10B
+uv run python main.py refresh-tickers --cap 0      # All tickers, no filter
 ```
 
 ### `fetch-data`
