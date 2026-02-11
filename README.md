@@ -97,12 +97,20 @@ uv run python main.py backtest -t AAPL --csv                   # Export results 
 
 ## Scanners
 
+All scanners use **MA5 > MA10 > MA20** as the core daily trend filter. MA50 alignment (MA20 > MA50) is optional and adds a **+15 bonus** to the score.
+
+| Scanner | Core filter | MA50 bonus | Touch/pullback targets |
+|---|---|---|---|
+| `entry_point` | MA5 > MA10 > MA20 | +15 if MA20 > MA50 | MA10/MA20 |
+| `strong_pullback` | MA5 > MA10 > MA20 | +15 if MA20 > MA50 | MA10/MA20 |
+| `ma_pullback` | MA5 > MA10 > MA20 | +15 if MA20 > MA50 | MA5 (short) |
+
 ### `entry_point` -- Trend Entry Scanner
 
-Finds stocks in a confirmed uptrend that are at an actionable entry point near daily MA10/MA20 support.
+Finds stocks in a short-term uptrend that are at an actionable entry point near daily MA10/MA20 support.
 
 **Filters:**
-- Daily MA10 > MA20 > MA50 (daily trend intact)
+- Daily MA5 > MA10 > MA20 (short-term trend intact)
 - Weekly close > weekly MA20 (intermediate uptrend)
 
 **Entry signals** (checked over the last 3 candles):
@@ -111,23 +119,24 @@ Finds stocks in a confirmed uptrend that are at an actionable entry point near d
 - **APPROACHING** -- Price drifting toward MA10/MA20 support.
 
 **Scoring bonuses:**
+- MA50 alignment: MA20 > MA50 adds +15 points
 - Recency: today's signal (ago=0) scores full points; older signals decay (0.7x, 0.4x)
 - Near ATH: stocks within 3% of all-time high (no overhead resistance) get up to +25 bonus points
 - Weekly alignment, daily MA spread, green candle
 
-**Parameters:** `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `approach_pct`, `touch_pct`, `lookback`, `wick_body_ratio`, `upper_wick_max`
+**Parameters:** `d_xfast`, `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `approach_pct`, `touch_pct`, `lookback`, `wick_body_ratio`, `upper_wick_max`
 
 ### `strong_pullback` -- Strong Weekly Trend + Daily Bounce
 
-Finds stocks with a strong weekly trend (weekly close > wMA10 > wMA20 > wMA40) that have pulled back to daily MA10/MA20 and bounced with a green candle.
+Finds stocks with a strong weekly trend (weekly close > wMA10 > wMA20 > wMA40) that have pulled back to daily MA10/MA20 and bounced with a green candle. Daily trend requires MA5 > MA10 > MA20, with +15 bonus when MA20 > MA50.
 
-**Parameters:** `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `w_slow`, `lookback_days`, `touch_pct`, `min_align_days`
+**Parameters:** `d_xfast`, `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `w_slow`, `lookback_days`, `touch_pct`, `min_align_days`
 
 ### `ma_pullback` -- MA Alignment + Pullback
 
-Finds stocks where daily 20/50/200 SMAs are aligned bullishly and price has pulled back within 2% of the 20 SMA.
+Finds stocks where daily 5/10/20 SMAs are aligned bullishly and price has pulled back within 2% of the 5 SMA. MA20 > MA50 alignment adds +15 bonus.
 
-**Parameters:** `ma_short`, `ma_medium`, `ma_long`, `pullback_pct`, `min_trend_days`
+**Parameters:** `ma_short`, `ma_medium`, `ma_long`, `ma_trend`, `pullback_pct`, `min_trend_days`
 
 ## Adding a New Scanner
 

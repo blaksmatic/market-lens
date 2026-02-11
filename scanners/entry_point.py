@@ -16,8 +16,9 @@ class EntryPointScanner(BaseScanner):
     doji (reversed T) formed with its wick testing the MA.
 
     Trend filter (must pass):
-      - Daily MA10 > MA20 > MA50 (strong daily structure)
+      - Daily MA5 > MA10 > MA20 (short-term trend intact)
       - Weekly close > weekly MA20 (intermediate uptrend intact)
+      - MA20 > MA50 alignment earns +15 bonus points
       - Full weekly alignment (close > w10 > w20) earns bonus points
 
     Entry signals (scored independently, best signal wins):
@@ -36,6 +37,7 @@ class EntryPointScanner(BaseScanner):
 
     def __init__(self):
         # Daily MAs
+        self.d_xfast = 5
         self.d_fast = 10
         self.d_mid = 20
         self.d_slow = 50
@@ -51,7 +53,7 @@ class EntryPointScanner(BaseScanner):
         self.upper_wick_max = 0.3   # Upper wick < 30% of total range
 
     def configure(self, **kwargs):
-        int_keys = ("d_fast", "d_mid", "d_slow", "w_fast", "w_mid", "lookback")
+        int_keys = ("d_xfast", "d_fast", "d_mid", "d_slow", "w_fast", "w_mid", "lookback")
         for key in int_keys:
             if key in kwargs:
                 setattr(self, key, int(kwargs[key]))
@@ -117,22 +119,27 @@ class EntryPointScanner(BaseScanner):
 
         # --- Daily trend filter ---
         close = ohlcv["Close"]
+        d_mxf = close.rolling(self.d_xfast).mean()
         d_mf = close.rolling(self.d_fast).mean()
         d_mm = close.rolling(self.d_mid).mean()
         d_ms = close.rolling(self.d_slow).mean()
 
+        mxf_val = d_mxf.iloc[-1]
         mf_val = d_mf.iloc[-1]
         mm_val = d_mm.iloc[-1]
         ms_val = d_ms.iloc[-1]
 
-        # Daily MAs must be aligned: fast > mid > slow
-        if not (mf_val > mm_val > ms_val):
+        # Daily MAs must be aligned: MA5 > MA10 > MA20
+        if not (mxf_val > mf_val > mm_val):
             return None
 
         # Latest close must be above MA20 (the floor)
         # Being below MA10 is fine -- that's the entry zone
         if close.iloc[-1] < mm_val:
             return None
+
+        # MA50 alignment bonus (MA20 > MA50)
+        ma50_aligned = mm_val > ms_val
 
         # --- Scan last N candles for entry signals ---
         best_signal = None
@@ -242,9 +249,13 @@ class EntryPointScanner(BaseScanner):
 
         best_score += resistance_bonus
 
+        # --- MA50 alignment bonus ---
+        if ma50_aligned:
+            best_score += 15
+
         # --- Trend strength bonus ---
-        # Daily MA spread
-        d_spread_pct = (mf_val - ms_val) / ms_val * 100
+        # Daily MA spread (MA5 vs MA20)
+        d_spread_pct = (mxf_val - mm_val) / mm_val * 100
         trend_bonus = min(15, d_spread_pct * 3)
         best_score += trend_bonus
 

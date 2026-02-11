@@ -97,12 +97,20 @@ uv run python main.py backtest -t AAPL --csv                   # 导出结果为
 
 ## 扫描器
 
+所有扫描器以 **MA5 > MA10 > MA20** 作为核心日线趋势过滤条件。MA50 排列（MA20 > MA50）为可选项，命中时额外加 **+15 分**。
+
+| 扫描器 | 核心过滤 | MA50 加分 | 触及/回踩目标 |
+|---|---|---|---|
+| `entry_point` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA10/MA20 |
+| `strong_pullback` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA10/MA20 |
+| `ma_pullback` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA5（短期） |
+
 ### `entry_point` -- 趋势入场点扫描器
 
-寻找处于确认上升趋势中、且在日线 MA10/MA20 支撑位附近出现入场信号的股票。
+寻找处于短期上升趋势中、且在日线 MA10/MA20 支撑位附近出现入场信号的股票。
 
 **过滤条件：**
-- 日线 MA10 > MA20 > MA50（日线趋势完好）
+- 日线 MA5 > MA10 > MA20（短期趋势完好）
 - 周线收盘价 > 周线 MA20（中期上升趋势）
 
 **入场信号**（检查最近 3 根 K 线）：
@@ -111,23 +119,24 @@ uv run python main.py backtest -t AAPL --csv                   # 导出结果为
 - **APPROACHING（接近）** -- 价格向 MA10/MA20 支撑位靠拢。
 
 **加分项：**
+- MA50 排列：MA20 > MA50 时 +15 分
 - 时效性：当日信号（ago=0）得满分，历史信号递减（0.7x, 0.4x）
 - 接近历史新高：距 ATH 3% 以内（无上方阻力）最多 +25 分
 - 周线完全排列、日线均线发散、阳线加分
 
-**参数：** `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `approach_pct`, `touch_pct`, `lookback`, `wick_body_ratio`, `upper_wick_max`
+**参数：** `d_xfast`, `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `approach_pct`, `touch_pct`, `lookback`, `wick_body_ratio`, `upper_wick_max`
 
 ### `strong_pullback` -- 强势周线趋势 + 日线回踩
 
-寻找周线趋势强劲（周线收盘 > wMA10 > wMA20 > wMA40）且日线回踩 MA10/MA20 后以阳线反弹的股票。
+寻找周线趋势强劲（周线收盘 > wMA10 > wMA20 > wMA40）且日线回踩 MA10/MA20 后以阳线反弹的股票。日线趋势要求 MA5 > MA10 > MA20，MA20 > MA50 时额外加 +15 分。
 
-**参数：** `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `w_slow`, `lookback_days`, `touch_pct`, `min_align_days`
+**参数：** `d_xfast`, `d_fast`, `d_mid`, `d_slow`, `w_fast`, `w_mid`, `w_slow`, `lookback_days`, `touch_pct`, `min_align_days`
 
 ### `ma_pullback` -- 均线排列 + 回踩
 
-寻找日线 20/50/200 均线多头排列、且价格回踩至 20 均线 2% 以内的股票。
+寻找日线 5/10/20 均线多头排列、且价格回踩至 5 均线 2% 以内的股票。MA20 > MA50 排列时额外加 +15 分。
 
-**参数：** `ma_short`, `ma_medium`, `ma_long`, `pullback_pct`, `min_trend_days`
+**参数：** `ma_short`, `ma_medium`, `ma_long`, `ma_trend`, `pullback_pct`, `min_trend_days`
 
 ## 添加新扫描器
 

@@ -17,7 +17,8 @@ class StrongPullbackScanner(BaseScanner):
       - Ensures the stock is in a strong intermediate uptrend
 
     Daily trigger:
-      - Daily MA10 > MA20 > MA50 (strong daily trend)
+      - Daily MA5 > MA10 > MA20 (short-term trend intact)
+      - MA20 > MA50 alignment earns +15 bonus points
       - Price dipped to touch or pierce MA10/MA20 in the last N days
         (low <= MA within touch_pct%)
       - Price has bounced: latest close is back above the MA it touched
@@ -34,6 +35,7 @@ class StrongPullbackScanner(BaseScanner):
 
     def __init__(self):
         # Daily MAs
+        self.d_xfast = 5
         self.d_fast = 10
         self.d_mid = 20
         self.d_slow = 50
@@ -49,7 +51,7 @@ class StrongPullbackScanner(BaseScanner):
 
     def configure(self, **kwargs):
         int_keys = (
-            "d_fast", "d_mid", "d_slow",
+            "d_xfast", "d_fast", "d_mid", "d_slow",
             "w_fast", "w_mid", "w_slow",
             "lookback_days", "min_align_days",
         )
@@ -92,23 +94,28 @@ class StrongPullbackScanner(BaseScanner):
         # --- Daily alignment ---
         close = ohlcv["Close"]
         low = ohlcv["Low"]
+        d_ma_xfast = close.rolling(self.d_xfast).mean()
         d_ma_fast = close.rolling(self.d_fast).mean()
         d_ma_mid = close.rolling(self.d_mid).mean()
         d_ma_slow = close.rolling(self.d_slow).mean()
 
+        dxf_val = d_ma_xfast.iloc[-1]
         df_val = d_ma_fast.iloc[-1]
         dm_val = d_ma_mid.iloc[-1]
         ds_val = d_ma_slow.iloc[-1]
 
-        # Daily MAs must be aligned: fast > mid > slow
-        if not (df_val > dm_val > ds_val):
+        # Daily MAs must be aligned: MA5 > MA10 > MA20
+        if not (dxf_val > df_val > dm_val):
             return None
 
-        # Alignment must have held for min_align_days
+        # MA50 alignment bonus (MA20 > MA50)
+        ma50_aligned = dm_val > ds_val
+
+        # Alignment must have held for min_align_days (MA5 > MA10 > MA20)
+        tail_xf = d_ma_xfast.tail(self.min_align_days)
         tail_f = d_ma_fast.tail(self.min_align_days)
         tail_m = d_ma_mid.tail(self.min_align_days)
-        tail_s = d_ma_slow.tail(self.min_align_days)
-        align_days = int(((tail_f > tail_m) & (tail_m > tail_s)).sum())
+        align_days = int(((tail_xf > tail_f) & (tail_f > tail_m)).sum())
         if align_days < self.min_align_days:
             return None
 
@@ -170,7 +177,10 @@ class StrongPullbackScanner(BaseScanner):
         # MA10 touch is stronger than MA20 touch
         ma10_bonus = 10 if touched_10 else 0
 
-        score = touch_score + bounce_score + weekly_score + candle_bonus + ma10_bonus
+        # MA50 alignment bonus
+        ma50_bonus = 15 if ma50_aligned else 0
+
+        score = touch_score + bounce_score + weekly_score + candle_bonus + ma10_bonus + ma50_bonus
 
         signal = "STRONG_BUY" if score >= 70 else "BUY" if score >= 45 else "WATCH"
 
