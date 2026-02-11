@@ -1,8 +1,8 @@
 [English](../README.md) | 简体中文
 
-# Stock Scanner - 美股扫描器
+# Stock Analyzer - 美股分析器
 
-一个基于命令行的美股扫描工具，通过可插拔的技术分析算法寻找投资机会。数据来源于 Yahoo Finance，本地缓存为 Parquet 文件。
+一个基于命令行的美股分析工具，通过可插拔的技术分析算法寻找投资机会。数据来源于 Yahoo Finance，本地缓存为 Parquet 文件。
 
 ## 安装
 
@@ -15,25 +15,25 @@ uv sync
 
 ```bash
 # 1. 获取股票池（市值 > 50亿美元的美股）
-uv run python main.py refresh-tickers
+uv run python main.py fetch-universe
 
 # 2. 拉取 OHLCV 行情数据 + 基本面数据
 uv run python main.py fetch-data
 
-# 3. 运行扫描器（自动更新数据 + 回测排名靠前的结果）
-uv run python main.py scan -s entry_point --top 20
+# 3. 运行分析器（自动更新数据 + 回测排名靠前的结果）
+uv run python main.py analyze -s entry_point --top 20
 ```
 
 ## 命令说明
 
-### `refresh-tickers`
+### `fetch-universe`
 
 从 Yahoo Finance 筛选器获取 NYSE + NASDAQ 的美股，缓存至 `data/tickers.parquet`。
 
 ```bash
-uv run python main.py refresh-tickers              # 默认：市值 > 50亿美元
-uv run python main.py refresh-tickers --cap 10     # 市值 > 100亿美元
-uv run python main.py refresh-tickers --cap 0      # 所有股票，无市值过滤
+uv run python main.py fetch-universe              # 默认：市值 > 50亿美元
+uv run python main.py fetch-universe --cap 10     # 市值 > 100亿美元
+uv run python main.py fetch-universe --cap 0      # 所有股票，无市值过滤
 ```
 
 ### `fetch-data`
@@ -51,37 +51,37 @@ uv run python main.py fetch-data --fundamentals-only
 
 **缓存机制**：OHLCV 数据按股票分别缓存为 Parquet 文件，后续运行仅增量拉取新数据。缓存会感知交易日——周末或盘前不会重复拉取。
 
-### `scan`
+### `analyze`
 
-运行扫描器分析缓存数据。默认会先更新 OHLCV 数据（如缓存已是最新则自动跳过）。
+运行分析器分析缓存数据。默认会先更新 OHLCV 数据（如缓存已是最新则自动跳过）。
 
 ```bash
-uv run python main.py scan -s entry_point                      # 运行扫描器（自动更新数据，回测排名靠前的结果）
-uv run python main.py scan -s entry_point --no-update           # 跳过数据更新
-uv run python main.py scan -s entry_point --top 20              # 仅显示前 20 个结果
-uv run python main.py scan -s entry_point --csv                 # 导出结果为 CSV
-uv run python main.py scan -s entry_point -t AAPL -t MSFT       # 扫描指定股票
-uv run python main.py scan -s ma_pullback -p pullback_pct=3     # 覆盖扫描器参数
+uv run python main.py analyze -s entry_point                      # 运行分析器（自动更新数据，回测排名靠前的结果）
+uv run python main.py analyze -s entry_point --no-update           # 跳过数据更新
+uv run python main.py analyze -s entry_point --top 20              # 仅显示前 20 个结果
+uv run python main.py analyze -s entry_point --csv                 # 导出结果为 CSV
+uv run python main.py analyze -s entry_point -t AAPL -t MSFT       # 分析指定股票
+uv run python main.py analyze -s ma_pullback -p pullback_pct=3     # 覆盖分析器参数
 ```
 
-`scan` 命令会自动对排名靠前的结果进行回测。最终得分由 60% 扫描得分 + 40% 回测得分混合计算。结果中的 `bt` 列格式为 `胜率%/平均收益/样本数`。
+`analyze` 命令会自动对排名靠前的结果进行回测。最终得分由 60% 分析得分 + 40% 回测得分混合计算。结果中的 `bt` 列格式为 `胜率%/平均收益/样本数`。
 
-### `list-scan`
+### `list-analyzers`
 
-列出所有可用的扫描器。
+列出所有可用的分析器。
 
 ```bash
-uv run python main.py list-scan
+uv run python main.py list-analyzers
 ```
 
 ### `backtest`
 
-对指定股票或扫描器的头部结果运行均线敏感度回测。遍历历史 OHLCV 数据，寻找趋势排列时的所有均线触及事件，并衡量反弹成功率。
+对指定股票或分析器的头部结果运行均线敏感度回测。遍历历史 OHLCV 数据，寻找趋势排列时的所有均线触及事件，并衡量反弹成功率。
 
 ```bash
 uv run python main.py backtest -t AAPL -t MSFT               # 回测指定股票
-uv run python main.py backtest -s entry_point                  # 先运行扫描器，再回测头部结果
-uv run python main.py backtest -s entry_point --top 20         # 回测扫描结果前 20 名
+uv run python main.py backtest -s entry_point                  # 先运行分析器，再回测头部结果
+uv run python main.py backtest -s entry_point --top 20         # 回测分析结果前 20 名
 uv run python main.py backtest -t AAPL --hold-days 10          # 自定义持仓天数（默认 5）
 uv run python main.py backtest -t AAPL --strategy max_return   # 使用最大收益策略
 uv run python main.py backtest -t AAPL --csv                   # 导出结果为 CSV
@@ -95,17 +95,17 @@ uv run python main.py backtest -t AAPL --csv                   # 导出结果为
 
 **评分：** 胜率与平均收益的加权组合，历史触及次数不足 10 次时会有置信度惩罚。
 
-## 扫描器
+## 分析器
 
-所有扫描器以 **MA5 > MA10 > MA20** 作为核心日线趋势过滤条件。MA50 排列（MA20 > MA50）为可选项，命中时额外加 **+15 分**。
+所有分析器以 **MA5 > MA10 > MA20** 作为核心日线趋势过滤条件。MA50 排列（MA20 > MA50）为可选项，命中时额外加 **+15 分**。
 
-| 扫描器 | 核心过滤 | MA50 加分 | 触及/回踩目标 |
+| 分析器 | 核心过滤 | MA50 加分 | 触及/回踩目标 |
 |---|---|---|---|
 | `entry_point` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA10/MA20 |
 | `strong_pullback` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA10/MA20 |
 | `ma_pullback` | MA5 > MA10 > MA20 | MA20 > MA50 时 +15 | MA5（短期） |
 
-### `entry_point` -- 趋势入场点扫描器
+### `entry_point` -- 趋势入场点分析器
 
 寻找处于短期上升趋势中、且在日线 MA10/MA20 支撑位附近出现入场信号的股票。
 
@@ -138,21 +138,21 @@ uv run python main.py backtest -t AAPL --csv                   # 导出结果为
 
 **参数：** `ma_short`, `ma_medium`, `ma_long`, `ma_trend`, `pullback_pct`, `min_trend_days`
 
-## 添加新扫描器
+## 添加新分析器
 
 在 `scanners/` 目录下创建文件即可，系统自动发现，无需修改其他文件。
 
 ```python
-# scanners/my_scanner.py
+# scanners/my_analyzer.py
 from typing import Optional
 import pandas as pd
 from scanners.base import BaseScanner, ScanResult, resample_ohlcv
 from scanners.registry import register
 
 @register
-class MyScanner(BaseScanner):
-    name = "my_scanner"
-    description = "在 list-scan 中显示的简短描述"
+class MyAnalyzer(BaseScanner):
+    name = "my_analyzer"
+    description = "在 list-analyzers 中显示的简短描述"
 
     def scan(self, ticker: str, ohlcv: pd.DataFrame, fundamentals: pd.Series) -> Optional[ScanResult]:
         # ohlcv: 日线 OHLCV，DatetimeIndex，列 [Open, High, Low, Close, Volume]
@@ -169,7 +169,7 @@ class MyScanner(BaseScanner):
         )
 ```
 
-然后运行：`uv run python main.py scan -s my_scanner`
+然后运行：`uv run python main.py analyze -s my_analyzer`
 
 ## 项目结构
 
@@ -185,10 +185,10 @@ data/
   fundamentals_cache.py 基本面缓存（单文件，每日刷新）
 scanners/
   base.py               BaseScanner 抽象类、ScanResult、resample_ohlcv 工具函数
-  registry.py           通过 @register 装饰器自动发现扫描器
-  ma_pullback.py        均线排列 + 回踩扫描器
-  strong_pullback.py    强势周线趋势 + 日线反弹扫描器
-  entry_point.py        趋势入场点扫描器（触及/锤子线识别）
+  registry.py           通过 @register 装饰器自动发现分析器
+  ma_pullback.py        均线排列 + 回踩分析器
+  strong_pullback.py    强势周线趋势 + 日线反弹分析器
+  entry_point.py        趋势入场点分析器（触及/锤子线识别）
 backtest/
   ma_sensitivity.py     均线触及回测引擎（bounce + max_return 策略）
 output/
@@ -202,4 +202,4 @@ output/
 - `data/tickers.parquet` -- 股票池
 - `data/ohlcv/{TICKER}.parquet` -- 每只股票的日线 OHLCV
 - `data/fundamentals.parquet` -- 所有股票的基本面数据
-- `output_results/` -- `--csv` 导出的扫描结果
+- `output_results/` -- `--csv` 导出的分析结果

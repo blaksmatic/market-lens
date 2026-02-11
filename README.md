@@ -2,7 +2,7 @@ English | [简体中文](docs/README_CN.md)
 
 # Stock Scanner
 
-A CLI tool for scanning US stocks to find investment opportunities using pluggable algorithm-based scanners. Data sourced from Yahoo Finance, cached locally as Parquet files.
+A CLI tool for analyzing US stocks to find investment opportunities using pluggable algorithm-based analyzers. Data sourced from Yahoo Finance, cached locally as Parquet files.
 
 ## Setup
 
@@ -15,25 +15,25 @@ uv sync
 
 ```bash
 # 1. Build the ticker universe (US stocks with market cap > $5B)
-uv run python main.py refresh-tickers
+uv run python main.py fetch-universe
 
 # 2. Fetch OHLCV + fundamentals data
 uv run python main.py fetch-data
 
-# 3. Run a scanner (auto-updates data + backtests top results)
-uv run python main.py scan -s entry_point --top 20
+# 3. Run an analyzer (auto-updates data + backtests top results)
+uv run python main.py analyze -s entry_point --top 20
 ```
 
 ## Commands
 
-### `refresh-tickers`
+### `fetch-universe`
 
 Fetches all US equities (NYSE + NASDAQ) using the Yahoo Finance screener. Results cached to `data/tickers.parquet`.
 
 ```bash
-uv run python main.py refresh-tickers              # Default: market cap > $5B
-uv run python main.py refresh-tickers --cap 10     # Market cap > $10B
-uv run python main.py refresh-tickers --cap 0      # All tickers, no filter
+uv run python main.py fetch-universe              # Default: market cap > $5B
+uv run python main.py fetch-universe --cap 10     # Market cap > $10B
+uv run python main.py fetch-universe --cap 0      # All tickers, no filter
 ```
 
 ### `fetch-data`
@@ -51,27 +51,27 @@ uv run python main.py fetch-data --fundamentals-only
 
 **Caching**: OHLCV data is cached per-ticker as Parquet files. Subsequent runs only fetch new data since the last cached date. The cache is aware of trading days -- it won't re-fetch on weekends or before market close if data is already current.
 
-### `scan`
+### `analyze`
 
-Runs a scanner against cached data. By default, updates OHLCV data before scanning (skips automatically if cache is fresh).
+Runs an analyzer against cached data. By default, updates OHLCV data before analyzing (skips automatically if cache is fresh).
 
 ```bash
-uv run python main.py scan -s entry_point                      # Run scanner (auto-updates data, backtests top results)
-uv run python main.py scan -s entry_point --no-update           # Skip data update
-uv run python main.py scan -s entry_point --top 20              # Show top 20 results
-uv run python main.py scan -s entry_point --csv                 # Export results to CSV
-uv run python main.py scan -s entry_point -t AAPL -t MSFT       # Scan specific tickers
-uv run python main.py scan -s ma_pullback -p pullback_pct=3     # Override scanner parameters
+uv run python main.py analyze -s entry_point                      # Run analyzer (auto-updates data, backtests top results)
+uv run python main.py analyze -s entry_point --no-update           # Skip data update
+uv run python main.py analyze -s entry_point --top 20              # Show top 20 results
+uv run python main.py analyze -s entry_point --csv                 # Export results to CSV
+uv run python main.py analyze -s entry_point -t AAPL -t MSFT       # Analyze specific tickers
+uv run python main.py analyze -s ma_pullback -p pullback_pct=3     # Override analyzer parameters
 ```
 
-The `scan` command automatically backtests the top results after scanning. The final score is a blend of 60% scan score + 40% backtest score. The `bt` column in results shows `win_rate%/avg_return/sample_size`.
+The `analyze` command automatically backtests the top results after analysis. The final score is a blend of 60% analysis score + 40% backtest score. The `bt` column in results shows `win_rate%/avg_return/sample_size`.
 
-### `list-scan`
+### `list-analyzers`
 
-Lists all available scanners.
+Lists all available analyzers.
 
 ```bash
-uv run python main.py list-scan
+uv run python main.py list-analyzers
 ```
 
 ### `backtest`
@@ -80,8 +80,8 @@ Runs MA sensitivity backtesting on specific tickers or on the top results from a
 
 ```bash
 uv run python main.py backtest -t AAPL -t MSFT               # Backtest specific tickers
-uv run python main.py backtest -s entry_point                  # Run scanner first, backtest top results
-uv run python main.py backtest -s entry_point --top 20         # Backtest top 20 scan results
+uv run python main.py backtest -s entry_point                  # Run analyzer first, backtest top results
+uv run python main.py backtest -s entry_point --top 20         # Backtest top 20 analysis results
 uv run python main.py backtest -t AAPL --hold-days 10          # Custom hold period (default 5)
 uv run python main.py backtest -t AAPL --strategy max_return   # Use max return strategy
 uv run python main.py backtest -t AAPL --csv                   # Export results to CSV
@@ -95,11 +95,11 @@ uv run python main.py backtest -t AAPL --csv                   # Export results 
 
 **Scoring:** Weighted combination of win rate and average return, with a confidence penalty for fewer than 10 historical touches.
 
-## Scanners
+## Analyzers
 
-All scanners use **MA5 > MA10 > MA20** as the core daily trend filter. MA50 alignment (MA20 > MA50) is optional and adds a **+15 bonus** to the score.
+All analyzers use **MA5 > MA10 > MA20** as the core daily trend filter. MA50 alignment (MA20 > MA50) is optional and adds a **+15 bonus** to the score.
 
-| Scanner | Core filter | MA50 bonus | Touch/pullback targets |
+| Analyzer | Core filter | MA50 bonus | Touch/pullback targets |
 |---|---|---|---|
 | `entry_point` | MA5 > MA10 > MA20 | +15 if MA20 > MA50 | MA10/MA20 |
 | `strong_pullback` | MA5 > MA10 > MA20 | +15 if MA20 > MA50 | MA10/MA20 |
@@ -138,21 +138,21 @@ Finds stocks where daily 5/10/20 SMAs are aligned bullishly and price has pulled
 
 **Parameters:** `ma_short`, `ma_medium`, `ma_long`, `ma_trend`, `pullback_pct`, `min_trend_days`
 
-## Adding a New Scanner
+## Adding a New Analyzer
 
 Create a file in `scanners/` -- it's auto-discovered, no other files need changes.
 
 ```python
-# scanners/my_scanner.py
+# scanners/my_analyzer.py
 from typing import Optional
 import pandas as pd
 from scanners.base import BaseScanner, ScanResult, resample_ohlcv
 from scanners.registry import register
 
 @register
-class MyScanner(BaseScanner):
-    name = "my_scanner"
-    description = "Short description shown in list-scan"
+class MyAnalyzer(BaseScanner):
+    name = "my_analyzer"
+    description = "Short description shown in list-analyzers"
 
     def scan(self, ticker: str, ohlcv: pd.DataFrame, fundamentals: pd.Series) -> Optional[ScanResult]:
         # ohlcv: daily OHLCV with DatetimeIndex [Open, High, Low, Close, Volume]
@@ -169,7 +169,7 @@ class MyScanner(BaseScanner):
         )
 ```
 
-Then run: `uv run python main.py scan -s my_scanner`
+Then run: `uv run python main.py analyze -s my_analyzer`
 
 ## Project Structure
 
@@ -186,9 +186,9 @@ data/
 scanners/
   base.py               BaseScanner ABC, ScanResult, resample_ohlcv helper
   registry.py           Auto-discovery via @register decorator
-  ma_pullback.py        MA alignment + pullback scanner
-  strong_pullback.py    Strong weekly trend + daily bounce scanner
-  entry_point.py        Trend entry point scanner (touch/hammer at MA)
+  ma_pullback.py        MA alignment + pullback analyzer
+  strong_pullback.py    Strong weekly trend + daily bounce analyzer
+  entry_point.py        Trend entry point analyzer (touch/hammer at MA)
 backtest/
   ma_sensitivity.py     MA touch backtest engine (bounce + max_return strategies)
 output/

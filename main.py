@@ -21,7 +21,7 @@ def cli():
     pass
 
 
-@cli.command("refresh-tickers")
+@cli.command("fetch-universe")
 @click.option("--cap", type=float, default=5, show_default=True, help="Min market cap in billions. 0 = no filter.")
 def refresh_tickers(cap):
     """Refresh the ticker universe from Yahoo Finance screener."""
@@ -66,15 +66,15 @@ def fetch_data(years, full, ticker, fundamentals_only, ohlcv_only):
     click.echo("Done.")
 
 
-@cli.command("scan")
-@click.option("--scanner", "-s", required=True, help="Scanner name to run.")
+@cli.command("analyze")
+@click.option("--scanner", "-s", required=True, help="Analyzer name to run.")
 @click.option("--csv", "export_csv", is_flag=True, help="Export results to CSV.")
 @click.option("--top", type=int, default=None, help="Show only top N results.")
 @click.option("--param", "-p", multiple=True, help="Scanner param as key=value.")
 @click.option("--ticker", "-t", multiple=True, help="Scan specific ticker(s) instead of universe.")
 @click.option("--no-update", is_flag=True, help="Skip data refresh, use cached data only.")
 def scan(scanner, export_csv, top, param, ticker, no_update):
-    """Run a scanner against cached data. Updates OHLCV data first by default."""
+    """Run an analyzer against cached data. Updates OHLCV data first by default."""
     from scanners.registry import auto_discover, get_scanner
     from output.formatter import print_results, export_csv as do_export_csv
     from data.ohlcv_cache import fetch_all_ohlcv
@@ -153,9 +153,9 @@ def scan(scanner, export_csv, top, param, ticker, no_update):
         click.echo("No results matched the scanner criteria.")
 
 
-@cli.command("list-scan")
-def list_scan():
-    """List all available scanners."""
+@cli.command("list-analyzers")
+def list_analyzers():
+    """List all available analyzers."""
     from scanners.registry import auto_discover, list_scanners
 
     auto_discover()
