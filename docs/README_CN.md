@@ -74,6 +74,38 @@ uv run python main.py analyze -s ma_pullback -p pullback_pct=3     # 覆盖分�
 uv run python main.py list-analyzers
 ```
 
+### `simulate`
+
+逐日交易模拟，使用分析器的入场/出场逻辑。逐个交易日遍历：分析器发出入场信号时买入，满足出场条件时卖出，全程跟踪组合表现。
+
+```bash
+uv run python main.py simulate -s entry_point                          # 全股票池，最近 1 年
+uv run python main.py simulate -s entry_point -t AAPL -t MSFT          # 指定股票
+uv run python main.py simulate -s entry_point --start 2024-01-01       # 自定义起始日期
+uv run python main.py simulate -s entry_point --top 20                 # 按总收益排前 20
+uv run python main.py simulate -s entry_point --capital 50000          # 自定义初始资金
+uv run python main.py simulate -s entry_point --position-size 0.5      # 每笔交易使用 50% 资金
+uv run python main.py simulate -s entry_point -t AAPL --csv            # 导出交易记录为 CSV
+uv run python main.py simulate -s entry_point -t AAPL --equity-curve   # 导出权益曲线 CSV
+uv run python main.py simulate -s entry_point --no-update              # 跳过数据更新
+```
+
+**工作原理：**
+- 每只股票同时只持有一个仓位（不重叠交易）
+- 默认周期：最近 1 年（可通过 `--start` / `--end` 覆盖）
+- 入场：分析器的 `check_entry_signal()` — 使用预计算指标加速
+- 出场：分析器的 `check_exit_signal()` — 每个分析器定义自己的出场规则
+
+**Entry Point 出场规则：**
+1. 止损：跌破入场价 10%
+2. 止盈：涨超入场价 15%
+3. MA20 跌破：连续 3 日收盘低于 MA20
+4. 急跌：收盘价低于 MA20 超过 5%
+5. 放量跌破：成交量超过 20 日均量 2 倍 + 收盘低于 MA20
+6. 时间止损：最长持仓 30 天
+
+**输出：** 汇总表（总收益率%、胜率%、平均收益%、最大回撤%、交易次数、平均持仓天数），聚合统计含出场原因分布。单只股票模拟会额外打印详细交易记录。
+
 ### `backtest`
 
 对指定股票或分析器的头部结果运行均线敏感度回测。遍历历史 OHLCV 数据，寻找趋势排列时的所有均线触及事件，并衡量反弹成功率。
@@ -184,15 +216,18 @@ data/
   ohlcv_cache.py        按股票缓存 Parquet，增量拉取
   fundamentals_cache.py 基本面缓存（单文件，每日刷新）
 scanners/
-  base.py               BaseScanner 抽象类、ScanResult、resample_ohlcv 工具函数
+  base.py               BaseScanner 抽象类、ScanResult、模拟数据类、resample_ohlcv
   registry.py           通过 @register 装饰器自动发现分析器
   ma_pullback.py        均线排列 + 回踩分析器
   strong_pullback.py    强势周线趋势 + 日线反弹分析器
-  entry_point.py        趋势入场点分析器（触及/锤子线识别）
+  entry_point.py        趋势入场点分析器（触及/锤子线识别，自定义出场规则）
+simulation/
+  engine.py             逐日交易模拟器（SimulationEngine）
 backtest/
   ma_sensitivity.py     均线触及回测引擎（bounce + max_return 策略）
 output/
-  formatter.py          Rich 终端表格 + CSV 导出
+  formatter.py          Rich 终端表格 + CSV 导出（analyze/backtest）
+  simulator_formatter.py  模拟汇总表、交易记录、CSV/权益曲线导出
 ```
 
 ## 数据存储

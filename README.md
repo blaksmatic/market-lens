@@ -74,6 +74,38 @@ Lists all available analyzers.
 uv run python main.py list-analyzers
 ```
 
+### `simulate`
+
+Runs a day-by-day trading simulation using analyzer-specific entry and exit logic. Walks through each trading day: buys when the analyzer signals an entry, sells when exit conditions are met, and tracks portfolio performance.
+
+```bash
+uv run python main.py simulate -s entry_point                          # Full universe, last 1 year
+uv run python main.py simulate -s entry_point -t AAPL -t MSFT          # Specific tickers
+uv run python main.py simulate -s entry_point --start 2024-01-01       # Custom start date
+uv run python main.py simulate -s entry_point --top 20                 # Top 20 by total return
+uv run python main.py simulate -s entry_point --capital 50000          # Custom initial capital
+uv run python main.py simulate -s entry_point --position-size 0.5      # Use 50% of capital per trade
+uv run python main.py simulate -s entry_point -t AAPL --csv            # Export trade log to CSV
+uv run python main.py simulate -s entry_point -t AAPL --equity-curve   # Export equity curve CSV
+uv run python main.py simulate -s entry_point --no-update              # Skip data refresh
+```
+
+**How it works:**
+- Single position per ticker (no overlapping trades)
+- Default period: last 1 year (override with `--start` / `--end`)
+- Entry: analyzer's `check_entry_signal()` — uses precomputed indicators for speed
+- Exit: analyzer's `check_exit_signal()` — each analyzer defines its own exit rules
+
+**Entry Point exit rules:**
+1. Stop-loss: 10% below entry price
+2. Profit target: 15% above entry price
+3. MA20 breakdown: close below MA20 for 3 consecutive days
+4. Sharp drop: close > 5% below MA20
+5. Volume breakdown: 2x average volume + close below MA20
+6. Time exit: 30 days max hold
+
+**Output:** Summary table (total return%, win rate%, avg return%, max drawdown%, trades, avg hold days), aggregate stats with exit reason breakdown. Single-ticker runs also print a detailed trade log.
+
 ### `backtest`
 
 Runs MA sensitivity backtesting on specific tickers or on the top results from a scanner. Walks through historical OHLCV data to find all MA touch events where the trend was aligned, then measures bounce success.
@@ -184,15 +216,18 @@ data/
   ohlcv_cache.py        Per-ticker Parquet cache with incremental fetch
   fundamentals_cache.py Fundamentals cache (single Parquet, daily refresh)
 scanners/
-  base.py               BaseScanner ABC, ScanResult, resample_ohlcv helper
+  base.py               BaseScanner ABC, ScanResult, simulation dataclasses, resample_ohlcv
   registry.py           Auto-discovery via @register decorator
   ma_pullback.py        MA alignment + pullback analyzer
   strong_pullback.py    Strong weekly trend + daily bounce analyzer
-  entry_point.py        Trend entry point analyzer (touch/hammer at MA)
+  entry_point.py        Trend entry point analyzer (touch/hammer at MA, custom exit rules)
+simulation/
+  engine.py             Day-by-day trading simulator (SimulationEngine)
 backtest/
   ma_sensitivity.py     MA touch backtest engine (bounce + max_return strategies)
 output/
-  formatter.py          Rich console table + CSV export
+  formatter.py          Rich console table + CSV export (analyze/backtest)
+  simulator_formatter.py  Simulation summary table, trade log, CSV/equity export
 ```
 
 ## Data Storage
