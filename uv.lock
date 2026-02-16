@@ -219,6 +219,29 @@ wheels = [
 ]
 
 [[package]]
+name = "market-lens"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "click" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "rich" },
+    { name = "tqdm" },
+    { name = "yfinance" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.0" },
+    { name = "pandas", specifier = ">=2.0" },
+    { name = "pyarrow", specifier = ">=14.0" },
+    { name = "rich", specifier = ">=13.0" },
+    { name = "tqdm", specifier = ">=4.65" },
+    { name = "yfinance", specifier = ">=1.0" },
+]
+
+[[package]]
 name = "mdurl"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -505,29 +528,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7b/ae/2d9c981590ed9999a0d91755b47fc74f74de286b0f5cee14c9269041e6c4/soupsieve-2.8.3.tar.gz", hash = "sha256:3267f1eeea4251fb42728b6dfb746edc9acaffc4a45b27e19450b676586e8349", size = 118627, upload-time = "2026-01-20T04:27:02.457Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/46/2c/1462b1d0a634697ae9e55b3cecdcb64788e8b7d63f54d923fcd0bb140aed/soupsieve-2.8.3-py3-none-any.whl", hash = "sha256:ed64f2ba4eebeab06cc4962affce381647455978ffc1e36bb79a545b91f45a95", size = 37016, upload-time = "2026-01-20T04:27:01.012Z" },
-]
-
-[[package]]
-name = "stock-scanner"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "click" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-    { name = "rich" },
-    { name = "tqdm" },
-    { name = "yfinance" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.0" },
-    { name = "pandas", specifier = ">=2.0" },
-    { name = "pyarrow", specifier = ">=14.0" },
-    { name = "rich", specifier = ">=13.0" },
-    { name = "tqdm", specifier = ">=4.65" },
-    { name = "yfinance", specifier = ">=1.0" },
 ]
 
 [[package]]

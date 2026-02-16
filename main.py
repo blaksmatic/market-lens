@@ -255,5 +255,100 @@ def backtest_cmd(ticker, scanner, top, hold_days, strategy, export_csv):
         click.echo("No backtest results.")
 
 
+@cli.command("simulate")
+@click.option("--scanner", "-s", required=True, help="Analyzer to simulate.")
+@click.option("--ticker", "-t", multiple=True, help="Ticker(s) to simulate.")
+@click.option("--start", type=str, default=None, help="Start date (YYYY-MM-DD).")
+@click.option("--end", type=str, default=None, help="End date (YYYY-MM-DD).")
+@click.option("--capital", type=float, default=100000, show_default=True, help="Initial capital.")
+@click.option("--position-size", type=float, default=1.0, show_default=True, help="Fraction of capital per trade (0-1).")
+@click.option("--top", type=int, default=None, help="Show only top N results by return.")
+@click.option("--csv", "export_csv", is_flag=True, help="Export trade log to CSV.")
+@click.option("--equity-curve", is_flag=True, help="Export equity curve CSV per ticker.")
+@click.option("--no-update", is_flag=True, help="Skip data refresh.")
+def simulate_cmd(scanner, ticker, start, end, capital, position_size, top, export_csv, equity_curve, no_update):
+    """Run day-by-day trading simulation with analyzer-specific entry/exit logic."""
+    from scanners.registry import auto_discover, get_scanner
+    from simulation.engine import SimulationEngine
+    from output.simulator_formatter import (
+        print_simulation_results,
+        print_trade_log,
+        export_simulation_csv,
+        export_equity_curve_csv,
+    )
+    from data.ohlcv_cache import fetch_all_ohlcv
+    from tickers.universe import load_universe
+
+    auto_discover()
+    scanner_obj = get_scanner(scanner)
+
+    start_date = pd.Timestamp(start) if start else None
+    end_date = pd.Timestamp(end) if end else None
+
+    if ticker:
+        symbols = list(ticker)
+    else:
+        tickers_df = load_universe()
+        symbols = tickers_df["symbol"].tolist()
+
+    if not no_update:
+        click.echo(f"Updating OHLCV for {len(symbols)} tickers...")
+        failed = fetch_all_ohlcv(symbols)
+        if failed:
+            click.echo(f"  {len(failed)} tickers failed to update.")
+
+    fundamentals_df = None
+    if FUNDAMENTALS_PATH.exists():
+        fundamentals_df = pd.read_parquet(FUNDAMENTALS_PATH)
+
+    engine = SimulationEngine(scanner_obj, initial_capital=capital, position_size=position_size)
+    results = []
+    skipped = 0
+
+    for sym in tqdm(symbols, desc=f"Simulating [{scanner}]"):
+        ohlcv_path = OHLCV_DIR / f"{sym}.parquet"
+        if not ohlcv_path.exists():
+            skipped += 1
+            continue
+
+        ohlcv = pd.read_parquet(ohlcv_path)
+        if fundamentals_df is not None and sym in fundamentals_df.index:
+            fund = fundamentals_df.loc[sym]
+        else:
+            fund = pd.Series()
+
+        try:
+            sim_result = engine.simulate_ticker(sym, ohlcv, fund, start_date, end_date)
+            if sim_result.num_trades > 0:
+                results.append(sim_result)
+        except Exception as e:
+            logger.warning(f"Simulation failed for {sym}: {e}")
+
+    if skipped:
+        click.echo(f"  Skipped {skipped} tickers (no OHLCV cache).")
+
+    results = sorted(results, key=lambda r: r.total_return_pct, reverse=True)
+    if top:
+        results = results[:top]
+
+    if results:
+        print_simulation_results(results, scanner)
+
+        # Print trade log for single-ticker runs
+        if len(results) == 1:
+            print_trade_log(results[0])
+
+        if export_csv:
+            path = export_simulation_csv(results, scanner, OUTPUT_DIR)
+            click.echo(f"Trade log CSV exported to {path}")
+
+        if equity_curve:
+            for res in results:
+                export_equity_curve_csv(res, scanner, OUTPUT_DIR)
+            click.echo(f"Equity curves exported to {OUTPUT_DIR}")
+    else:
+        click.echo("No simulation results (no trades generated).")
+
+
 if __name__ == "__main__":
     cli()
