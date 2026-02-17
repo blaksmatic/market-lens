@@ -106,6 +106,32 @@ uv run python main.py simulate -s entry_point --no-update              # Skip da
 
 **Output:** Summary table (total return%, win rate%, avg return%, max drawdown%, trades, avg hold days), aggregate stats with exit reason breakdown. Single-ticker runs also print a detailed trade log.
 
+### `portfolio`
+
+Runs a portfolio-level simulation with a single shared capital pool across all tickers. Each day, checks exits for open positions first, then buys the highest-scoring entry signals. This answers: "If I had followed the scanner's signals for the past year with real money, what would my return be?"
+
+```bash
+uv run python main.py portfolio -s entry_point                           # Full universe, last 1 year
+uv run python main.py portfolio -s entry_point -t AAPL -t MSFT           # Specific tickers
+uv run python main.py portfolio -s entry_point --max-positions 20        # More concurrent positions
+uv run python main.py portfolio -s entry_point --position-size 0.05      # 5% per position
+uv run python main.py portfolio -s entry_point --capital 50000           # Custom starting capital
+uv run python main.py portfolio -s entry_point --start 2024-01-01        # Custom start date
+uv run python main.py portfolio -s entry_point --top 100                 # Limit to top 100 current signals
+uv run python main.py portfolio -s entry_point --csv --equity-curve      # Export trade log + equity curve
+uv run python main.py portfolio -s entry_point --ticker-breakdown        # Show per-ticker stats
+uv run python main.py portfolio -s entry_point --no-update               # Skip data refresh
+```
+
+**How it works:**
+- Single capital pool (default $100K), max 10 concurrent positions, 10% of capital per position
+- Each day: process exits first (frees capital + slots), then buy highest-score entries
+- Position size is a fraction of **initial** capital (stays consistent regardless of P&L)
+- One scanner instance per ticker with precomputed indicators for speed
+- Entry priority: when multiple tickers signal the same day, highest scanner score buys first
+
+**Output:** Summary panel (total return%, CAGR%, max drawdown%, win rate%, trades, avg hold days), exit reason breakdown table. Optional: per-ticker breakdown (`--ticker-breakdown`), trade log (auto-shown for small universes), CSV exports.
+
 ### `backtest`
 
 Runs MA sensitivity backtesting on specific tickers or on the top results from a scanner. Walks through historical OHLCV data to find all MA touch events where the trend was aligned, then measures bounce success.
@@ -222,12 +248,14 @@ scanners/
   strong_pullback.py    Strong weekly trend + daily bounce analyzer
   entry_point.py        Trend entry point analyzer (touch/hammer at MA, custom exit rules)
 simulation/
-  engine.py             Day-by-day trading simulator (SimulationEngine)
+  engine.py             Per-ticker day-by-day trading simulator (SimulationEngine)
+  portfolio.py          Portfolio-level simulator with shared capital (PortfolioEngine)
 backtest/
   ma_sensitivity.py     MA touch backtest engine (bounce + max_return strategies)
 output/
   formatter.py          Rich console table + CSV export (analyze/backtest)
-  simulator_formatter.py  Simulation summary table, trade log, CSV/equity export
+  simulator_formatter.py  Per-ticker simulation summary, trade log, CSV/equity export
+  portfolio_formatter.py  Portfolio simulation summary, trade log, ticker breakdown, CSV export
 ```
 
 ## Data Storage
@@ -237,4 +265,4 @@ All data is cached locally under `data/`:
 - `data/tickers.parquet` -- Ticker universe
 - `data/ohlcv/{TICKER}.parquet` -- Daily OHLCV per ticker
 - `data/fundamentals.parquet` -- Fundamentals for all tickers
-- `output_results/` -- CSV exports from `--csv` flag
+- `results/` -- CSV exports from `--csv` flag (analyze/, simulation/, portfolio/)

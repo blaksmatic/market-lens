@@ -4,7 +4,7 @@ import sys
 import click
 import pandas as pd
 
-from config import FUNDAMENTALS_PATH, OHLCV_DIR, OHLCV_HISTORY_YEARS, OUTPUT_DIR
+from config import FUNDAMENTALS_PATH, OHLCV_DIR, OHLCV_HISTORY_YEARS, RESULTS_ANALYZE_DIR, RESULTS_SIMULATION_DIR, RESULTS_PORTFOLIO_DIR
 from tqdm import tqdm
 
 logging.basicConfig(
@@ -147,7 +147,7 @@ def scan(scanner, export_csv, top, param, ticker, no_update):
     if results:
         print_results(results, scanner)
         if export_csv:
-            path = do_export_csv(results, scanner, OUTPUT_DIR)
+            path = do_export_csv(results, scanner, RESULTS_ANALYZE_DIR)
             click.echo(f"CSV exported to {path}")
     else:
         click.echo("No results matched the scanner criteria.")
@@ -249,7 +249,7 @@ def backtest_cmd(ticker, scanner, top, hold_days, strategy, export_csv):
     if results:
         print_results(results, f"backtest ({strategy}, {hold_days}d)")
         if export_csv:
-            path = do_export_csv(results, f"backtest_{strategy}", OUTPUT_DIR)
+            path = do_export_csv(results, f"backtest_{strategy}", RESULTS_ANALYZE_DIR)
             click.echo(f"CSV exported to {path}")
     else:
         click.echo("No backtest results.")
@@ -301,6 +301,27 @@ def simulate_cmd(scanner, ticker, start, end, capital, position_size, top, expor
     if FUNDAMENTALS_PATH.exists():
         fundamentals_df = pd.read_parquet(FUNDAMENTALS_PATH)
 
+    # If no explicit tickers, run analyzer first to find current signals
+    # This ensures we simulate only tickers that are signaling NOW
+    scan_details = {}
+    if not ticker:
+        click.echo(f"Running analyzer [{scanner}] to find current signals...")
+        scan_results = []
+        for sym in tqdm(symbols, desc=f"Scanning [{scanner}]"):
+            ohlcv_path = OHLCV_DIR / f"{sym}.parquet"
+            if not ohlcv_path.exists():
+                continue
+            ohlcv = pd.read_parquet(ohlcv_path)
+            fund = fundamentals_df.loc[sym] if fundamentals_df is not None and sym in fundamentals_df.index else pd.Series()
+            result = scanner_obj.scan(sym, ohlcv, fund)
+            if result is not None:
+                scan_results.append(result)
+
+        scan_results = sorted(scan_results, key=lambda r: r.score, reverse=True)
+        symbols = [r.ticker for r in scan_results]
+        scan_details = {r.ticker: r for r in scan_results}
+        click.echo(f"Found {len(symbols)} tickers with current signals. Simulating...")
+
     engine = SimulationEngine(scanner_obj, initial_capital=capital, position_size=position_size)
     results = []
     skipped = 0
@@ -320,6 +341,9 @@ def simulate_cmd(scanner, ticker, start, end, capital, position_size, top, expor
         try:
             sim_result = engine.simulate_ticker(sym, ohlcv, fund, start_date, end_date)
             if sim_result.num_trades > 0:
+                # Attach current scan info if available
+                if sym in scan_details:
+                    sim_result.scan_result = scan_details[sym]
                 results.append(sim_result)
         except Exception as e:
             logger.warning(f"Simulation failed for {sym}: {e}")
@@ -339,15 +363,134 @@ def simulate_cmd(scanner, ticker, start, end, capital, position_size, top, expor
             print_trade_log(results[0])
 
         if export_csv:
-            path = export_simulation_csv(results, scanner, OUTPUT_DIR)
+            path = export_simulation_csv(results, scanner, RESULTS_SIMULATION_DIR)
             click.echo(f"Trade log CSV exported to {path}")
 
         if equity_curve:
             for res in results:
-                export_equity_curve_csv(res, scanner, OUTPUT_DIR)
-            click.echo(f"Equity curves exported to {OUTPUT_DIR}")
+                export_equity_curve_csv(res, scanner, RESULTS_SIMULATION_DIR)
+            click.echo(f"Equity curves exported to {RESULTS_SIMULATION_DIR}")
     else:
         click.echo("No simulation results (no trades generated).")
+
+
+@cli.command("portfolio")
+@click.option("--scanner", "-s", required=True, help="Analyzer to use for entry/exit signals.")
+@click.option("--param", "-p", multiple=True, help="Scanner param as key=value.")
+@click.option("--ticker", "-t", multiple=True, help="Specific ticker(s). Default: full universe.")
+@click.option("--start", type=str, default=None, help="Start date (YYYY-MM-DD).")
+@click.option("--end", type=str, default=None, help="End date (YYYY-MM-DD).")
+@click.option("--capital", type=float, default=100_000, show_default=True, help="Initial capital.")
+@click.option("--max-positions", type=int, default=10, show_default=True, help="Max concurrent positions.")
+@click.option("--position-size", type=float, default=0.10, show_default=True, help="Fraction of initial capital per position (0-1).")
+@click.option("--top", type=int, default=None, help="Limit universe to top N current scanner results.")
+@click.option("--csv", "export_csv", is_flag=True, help="Export trade log to CSV.")
+@click.option("--equity-curve", is_flag=True, help="Export equity curve CSV.")
+@click.option("--ticker-breakdown", is_flag=True, help="Show per-ticker performance breakdown.")
+@click.option("--no-update", is_flag=True, help="Skip data refresh.")
+def portfolio_cmd(scanner, param, ticker, start, end, capital, max_positions,
+                  position_size, top, export_csv, equity_curve, ticker_breakdown, no_update):
+    """Run portfolio-level simulation with shared capital across multiple tickers."""
+    from scanners.registry import auto_discover, get_scanner
+    from simulation.portfolio import PortfolioEngine
+    from output.portfolio_formatter import (
+        print_portfolio_summary,
+        print_exit_breakdown,
+        print_portfolio_trade_log,
+        print_ticker_breakdown as print_tkr_breakdown,
+        export_portfolio_csv,
+        export_portfolio_equity_csv,
+    )
+    from data.ohlcv_cache import fetch_all_ohlcv
+    from tickers.universe import load_universe
+
+    auto_discover()
+    scanner_obj = get_scanner(scanner)
+
+    if param:
+        params = dict(p.split("=", 1) for p in param)
+        scanner_obj.configure(**params)
+
+    start_date = pd.Timestamp(start) if start else None
+    end_date = pd.Timestamp(end) if end else None
+
+    if ticker:
+        symbols = list(ticker)
+    else:
+        tickers_df = load_universe()
+        symbols = tickers_df["symbol"].tolist()
+
+    if not no_update:
+        click.echo(f"Updating OHLCV for {len(symbols)} tickers...")
+        failed = fetch_all_ohlcv(symbols)
+        if failed:
+            click.echo(f"  {len(failed)} tickers failed to update.")
+
+    # If no explicit tickers and --top is set, run scanner to filter universe
+    if not ticker and top:
+        click.echo(f"Running analyzer [{scanner}] to find current signals...")
+        fundamentals_df = None
+        if FUNDAMENTALS_PATH.exists():
+            fundamentals_df = pd.read_parquet(FUNDAMENTALS_PATH)
+
+        scan_results = []
+        for sym in tqdm(symbols, desc=f"Scanning [{scanner}]"):
+            ohlcv_path = OHLCV_DIR / f"{sym}.parquet"
+            if not ohlcv_path.exists():
+                continue
+            ohlcv = pd.read_parquet(ohlcv_path)
+            fund = fundamentals_df.loc[sym] if fundamentals_df is not None and sym in fundamentals_df.index else pd.Series()
+            result = scanner_obj.scan(sym, ohlcv, fund)
+            if result is not None:
+                scan_results.append(result)
+
+        scan_results = sorted(scan_results, key=lambda r: r.score, reverse=True)[:top]
+        symbols = [r.ticker for r in scan_results]
+        click.echo(f"Selected {len(symbols)} tickers with current signals.")
+
+    # Load all OHLCV data into memory
+    fundamentals_df = None
+    if FUNDAMENTALS_PATH.exists():
+        fundamentals_df = pd.read_parquet(FUNDAMENTALS_PATH)
+
+    click.echo(f"Loading OHLCV data for {len(symbols)} tickers...")
+    ohlcv_data: dict[str, pd.DataFrame] = {}
+    fundamentals_data: dict[str, pd.Series] = {}
+    for sym in symbols:
+        ohlcv_path = OHLCV_DIR / f"{sym}.parquet"
+        if ohlcv_path.exists():
+            ohlcv_data[sym] = pd.read_parquet(ohlcv_path)
+            if fundamentals_df is not None and sym in fundamentals_df.index:
+                fundamentals_data[sym] = fundamentals_df.loc[sym]
+            else:
+                fundamentals_data[sym] = pd.Series()
+
+    click.echo(f"Running portfolio simulation [{scanner}] across {len(ohlcv_data)} tickers...")
+    engine = PortfolioEngine(
+        scanner_obj,
+        initial_capital=capital,
+        max_positions=max_positions,
+        position_size=position_size,
+    )
+    result = engine.simulate(
+        list(ohlcv_data.keys()), ohlcv_data, fundamentals_data, start_date, end_date
+    )
+
+    if result.num_trades > 0:
+        print_portfolio_summary(result)
+        print_exit_breakdown(result)
+        if ticker_breakdown:
+            print_tkr_breakdown(result)
+        if ticker or len(ohlcv_data) <= 5:
+            print_portfolio_trade_log(result)
+        if export_csv:
+            path = export_portfolio_csv(result, RESULTS_PORTFOLIO_DIR)
+            click.echo(f"Trade log CSV exported to {path}")
+        if equity_curve:
+            path = export_portfolio_equity_csv(result, RESULTS_PORTFOLIO_DIR)
+            click.echo(f"Equity curve CSV exported to {path}")
+    else:
+        click.echo("No trades generated.")
 
 
 if __name__ == "__main__":

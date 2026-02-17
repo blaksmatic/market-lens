@@ -7,8 +7,8 @@ data/ohlcv/
 data/tickers.parquet
 data/fundamentals.parquet
 
-# Scan output
-output_results/
+# Results output
+results/
 
 # Editor/AI local settings
 .claude/

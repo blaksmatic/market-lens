@@ -6,7 +6,10 @@ DATA_DIR = PROJECT_ROOT / "data"
 OHLCV_DIR = DATA_DIR / "ohlcv"
 FUNDAMENTALS_PATH = DATA_DIR / "fundamentals.parquet"
 TICKERS_PATH = DATA_DIR / "tickers.parquet"
-OUTPUT_DIR = PROJECT_ROOT / "output_results"
+RESULTS_DIR = PROJECT_ROOT / "results"
+RESULTS_ANALYZE_DIR = RESULTS_DIR / "analyze"
+RESULTS_SIMULATION_DIR = RESULTS_DIR / "simulation"
+RESULTS_PORTFOLIO_DIR = RESULTS_DIR / "portfolio"
 
 # Universe filters
 MIN_MARKET_CAP = 5_000_000_000  # $5B

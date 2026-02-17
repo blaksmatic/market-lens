@@ -18,13 +18,22 @@ def print_simulation_results(results: list[SimulationResult], scanner_name: str)
         return
 
     # --- Summary table ---
+    has_scan = any(r.scan_result is not None for r in results)
+
+    title = f"Simulation: {scanner_name} | {datetime.now():%Y-%m-%d %H:%M}"
+    if has_scan:
+        title += " | Filtered by current signals"
+
     table = Table(
-        title=f"Simulation: {scanner_name} | {datetime.now():%Y-%m-%d %H:%M}",
+        title=title,
         show_lines=False,
         expand=True,
     )
     table.add_column("#", style="dim", width=3, no_wrap=True)
     table.add_column("Ticker", style="bold cyan", no_wrap=True)
+    if has_scan:
+        table.add_column("Signal", no_wrap=True)
+        table.add_column("Score", justify="right", no_wrap=True)
     table.add_column("Return %", justify="right", no_wrap=True)
     table.add_column("Win %", justify="right", no_wrap=True)
     table.add_column("Avg Ret %", justify="right", no_wrap=True)
@@ -35,16 +44,27 @@ def print_simulation_results(results: list[SimulationResult], scanner_name: str)
     for i, r in enumerate(results, 1):
         ret_color = "green" if r.total_return_pct > 0 else "red"
         wr_color = "green" if r.win_rate >= 60 else ("yellow" if r.win_rate >= 50 else "white")
-        table.add_row(
-            str(i),
-            r.ticker,
+
+        row = [str(i), r.ticker]
+        if has_scan:
+            sr = r.scan_result
+            if sr:
+                sig_color = {"STRONG_BUY": "bold green", "BUY": "green", "WATCH": "yellow"}.get(sr.signal, "white")
+                entry = sr.details.get("entry", "")
+                row.append(f"[{sig_color}]{entry}[/{sig_color}]")
+                row.append(f"{sr.score:.0f}")
+            else:
+                row.extend(["", ""])
+
+        row.extend([
             f"[{ret_color}]{r.total_return_pct:+.1f}[/{ret_color}]",
             f"[{wr_color}]{r.win_rate:.1f}[/{wr_color}]",
             f"{r.avg_return_pct:+.2f}",
             f"{r.max_drawdown_pct:.1f}",
             str(r.num_trades),
             f"{r.avg_hold_days:.0f}d",
-        )
+        ])
+        table.add_row(*row)
 
     console.print(table)
 

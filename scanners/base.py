@@ -77,6 +77,7 @@ class SimulationResult:
     avg_hold_days: float
     total_days: int
     exit_breakdown: dict = field(default_factory=dict)  # {reason: count}
+    scan_result: Optional["ScanResult"] = None  # Current scanner signal (if run via analyze-first mode)
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +160,7 @@ class BaseScanner(ABC):
             date=as_of_date,
             price=ohlcv_slice["Close"].iloc[-1],
             reason=result.signal,
-            metadata=result.details,
+            metadata={**result.details, "score": result.score},
         )
 
     def check_exit_signal(

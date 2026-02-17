@@ -106,6 +106,32 @@ uv run python main.py simulate -s entry_point --no-update              # 跳过�
 
 **输出：** 汇总表（总收益率%、胜率%、平均收益%、最大回撤%、交易次数、平均持仓天数），聚合统计含出场原因分布。单只股票模拟会额外打印详细交易记录。
 
+### `portfolio`
+
+组合级别模拟，使用单一资金池在所有股票间统一调配。每个交易日先检查持仓出场，再买入得分最高的入场信号。回答："如果我过去一年按照分析器信号操作，收益是多少？"
+
+```bash
+uv run python main.py portfolio -s entry_point                           # 全股票池，最近 1 年
+uv run python main.py portfolio -s entry_point -t AAPL -t MSFT           # 指定股票
+uv run python main.py portfolio -s entry_point --max-positions 20        # 更多并发持仓
+uv run python main.py portfolio -s entry_point --position-size 0.05      # 每笔仓位 5%
+uv run python main.py portfolio -s entry_point --capital 50000           # 自定义初始资金
+uv run python main.py portfolio -s entry_point --start 2024-01-01        # 自定义起始日期
+uv run python main.py portfolio -s entry_point --top 100                 # 限制为当前信号前 100 名
+uv run python main.py portfolio -s entry_point --csv --equity-curve      # 导出交易记录 + 权益曲线
+uv run python main.py portfolio -s entry_point --ticker-breakdown        # 显示按股票统计
+uv run python main.py portfolio -s entry_point --no-update               # 跳过数据更新
+```
+
+**工作原理：**
+- 单一资金池（默认 $100,000），最多 10 个并发持仓，每笔仓位为初始资金的 10%
+- 每日：先处理出场（释放资金和仓位）→ 再按得分从高到低买入
+- 仓位大小基于**初始**资金（不随盈亏变动，保持一致性）
+- 每只股票独立预计算指标，确保速度
+- 入场优先级：同一天多只股票发出信号时，得分最高的优先买入
+
+**输出：** 汇总面板（总收益率%、年化收益率%、最大回撤%、胜率%、交易次数、平均持仓天数），出场原因分布表。可选：按股票统计（`--ticker-breakdown`）、交易记录（小股票池自动显示）、CSV 导出。
+
 ### `backtest`
 
 对指定股票或分析器的头部结果运行均线敏感度回测。遍历历史 OHLCV 数据，寻找趋势排列时的所有均线触及事件，并衡量反弹成功率。
@@ -222,12 +248,14 @@ scanners/
   strong_pullback.py    强势周线趋势 + 日线反弹分析器
   entry_point.py        趋势入场点分析器（触及/锤子线识别，自定义出场规则）
 simulation/
-  engine.py             逐日交易模拟器（SimulationEngine）
+  engine.py             逐股票逐日交易模拟器（SimulationEngine）
+  portfolio.py          组合级别模拟器，共享资金池（PortfolioEngine）
 backtest/
   ma_sensitivity.py     均线触及回测引擎（bounce + max_return 策略）
 output/
   formatter.py          Rich 终端表格 + CSV 导出（analyze/backtest）
-  simulator_formatter.py  模拟汇总表、交易记录、CSV/权益曲线导出
+  simulator_formatter.py  逐股票模拟汇总表、交易记录、CSV/权益曲线导出
+  portfolio_formatter.py  组合模拟汇总、交易记录、按股票统计、CSV 导出
 ```
 
 ## 数据存储
@@ -237,4 +265,4 @@ output/
 - `data/tickers.parquet` -- 股票池
 - `data/ohlcv/{TICKER}.parquet` -- 每只股票的日线 OHLCV
 - `data/fundamentals.parquet` -- 所有股票的基本面数据
-- `output_results/` -- `--csv` 导出的分析结果
+- `results/` -- `--csv` 导出结果（analyze/、simulation/、portfolio/）
